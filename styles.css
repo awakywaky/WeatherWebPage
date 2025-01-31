@@ -1,8 +1,21 @@
+:root {
+    --info-margin-top: 25px;
+    --info-padding: 20px;
+    --info-border-radius: 25px;
+
+    --app-padding: 40px 50px;
+    --app-border-radius: 30px;
+    --app-box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+
+    --city-selector-gap: 15px;
+    --city-selector-margin-bottom: 25px;
+}
+
 body {
     font-family: 'Arial', sans-serif;
     margin: 0;
     padding: 0;
-    background: url('../web-labwork-1/image/oboi.jpg') no-repeat center center;
+    background: url('image/main_image_background.jpg') no-repeat center center;
     background-size: cover;
     display: flex;
     justify-content: center;
@@ -14,9 +27,9 @@ body {
 
 .weather-app {
     background: rgba(255, 255, 255, 0.8);
-    padding: 40px 50px;
-    border-radius: 30px;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    padding: var(--app-padding);
+    border-radius: var(--app-border-radius);
+    box-shadow: var(--app-box-shadow);
     text-align: center;
     width: 90%;
     max-width: 500px;
@@ -29,9 +42,9 @@ body {
     position: absolute;
     top: 10px;
     left: 10px;
-    width: 110px;
-    height: 90px;
-    background: url('../web-labwork-1/image/ranbow.png') no-repeat center center;
+    width: 120px;
+    height: 95px;
+    background: url('./image/ranbow.png') no-repeat center center;
     background-size: cover;
     z-index: 1;
     transition: background 1.5s ease;
@@ -39,9 +52,9 @@ body {
 
 .weather-app__city-selector {
     display: flex;
-    gap: 15px;
+    gap: var(--city-selector-gap);
     justify-content: center;
-    margin-bottom: 25px;
+    margin-bottom: var(--city-selector-margin-bottom);
 }
 
 .weather-app__city-input {
@@ -88,13 +101,39 @@ body {
 }
 
 .weather-app__info {
-    margin-top: 25px;
-    padding: 20px;
-    border-radius: 25px;
+    margin-top: var(--info-margin-top);
+    padding: var(--info-padding);
+    border-radius: var(--info-border-radius);
     background: rgba(255, 255, 255, 0.9);
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
     color: #444;
     font-size: 1.2rem;
     line-height: 1.6;
     text-align: left;
+}
+
+.weather-app__error-message {
+    margin-top: 15px;
+    font-size: 1rem;
+    font-weight: bold;
+    display: none;
+    text-align: center;
+    color: #93002f;
+    background: linear-gradient(135deg, #f13c76, #f16c97);
+    border: 2px solid #93002f;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    animation: fadeInOut 3s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0%, 100% {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    10%, 90% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
