@@ -1,183 +1,249 @@
-const cityInput = document.getElementById('city-input');
-const citySubmit = document.getElementById('city-submit');
-const weatherInfo = document.getElementById('weather-info');
+const API_BASE_URL = 'https://api.api-ninjas.com/v1';
 
-window.onload = () => {
-    const savedCity = localStorage.getItem('city');
-    if (savedCity) {
-        fetchWeather(savedCity);
-    }
-};
-
-citySubmit.addEventListener('click', () => {
-    const city = cityInput.value.trim();
-    if (!city) {
-        alert('Enter city name');
-        return;
-    }
-    if (!/^[a-zA-Z\s-]+$/.test(city)) {
-        alert('Enter a city name containing only letters');
-        return;
-    }
-    localStorage.setItem('city', city);
-    citySubmit.textContent = 'Loading...';
-
-    fetchWeather(city)
-        .then(() => {
-            citySubmit.textContent = 'Show weather';
-            citySubmit.disabled = false;
-        })
-        .catch(() => {
-            alert('Failed to get weather data :( Shall we try again?');
-            citySubmit.textContent = 'Show weather';
-            citySubmit.disabled = false;
-        });
-});
-
-async function fetchWeather(city) {
-    try {
-        const cityApiUrl = `https://api.api-ninjas.com/v1/city?name=${city}`;
-        const cityResponse = await fetch(cityApiUrl, {
-            headers: { 'X-Api-Key': '9aIAxYHHQOQnmq4dOkuXOA==wfQa96nJcyX8b14o' }
-        });
-
-        if (!cityResponse.ok) {
-            throw new Error(`Error finding city: ${cityResponse.status} ${cityResponse.statusText}`);
-        }
-
-        const cityData = await cityResponse.json();
-        if (!cityData || cityData.length === 0) {
-            alert('Such a city has not yet been invented :(');
-            return;
-        }
-
-        const { latitude, longitude } = cityData[0];
-        const weatherApiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`;
-        const weatherResponse = await fetch(weatherApiUrl);
-
-        if (!weatherResponse.ok) {
-            throw new Error(`Error when searching for weather: ${weatherResponse.status} ${weatherResponse.statusText}`);
-        }
-
-        const weatherData = await weatherResponse.json();
-        displayWeather(weatherData);
-    } catch (error) {
-        console.error('Error:', error.message);
-        alert('Weather not found :( Shall we try again?');
+class CityNotFoundError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "CityNotFoundError";
     }
 }
 
+class WeatherDataError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "WeatherDataError";
+    }
+}
+
+const WEATHER_CODES = {
+    CLEAR: [0, 1],
+    CLOUDY: [2, 3],
+    RAINY: [51, 53, 55, 61, 63, 65, 81, 82, 85],
+    SNOWY: [71, 73, 75, 77, 85, 86],
+    STORMY: [95, 96, 99],
+};
+
+const WEATHER_DESCRIPTIONS = {
+    CLEAR: 'Clear skies',
+    CLOUDY: 'Cloudy',
+    RAINY: 'Rainy',
+    SNOWY: 'Snowy',
+    STORMY: 'Stormy',
+};
+
+const WEATHER_STYLES = {
+    CLEAR: {
+        backgroundImage: 'url("./image/clear_background.jpg")',
+        appBackground: 'linear-gradient(135deg, #FFFACD, #FFE4B5)',
+        appImageBackground: 'url("./image/sun.png")',
+        buttonColor: '#fffacd',
+        inputBackground: '#ffffff',
+        inputBorderColor: '#5c582b',
+        color: '#BDB76B',
+    },
+    CLOUDY: {
+        backgroundImage: 'url("./image/cloudy_background.jpg")',
+        appBackground: 'linear-gradient(135deg, #778899, #F0F8FF)',
+        appImageBackground: 'url("./image/cloudy.png")',
+        buttonColor: '#7297af',
+        inputBackground: '#ffffff',
+        inputBorderColor: '#04273e',
+        color: '#04273e',
+    },
+    RAINY: {
+        backgroundImage: 'url("./image/rainy_background.jpg")',
+        appBackground: 'linear-gradient(135deg, #808080, #ADD8E6)',
+        appImageBackground: 'url("./image/rain.png")',
+        buttonColor: '#9cbbd6',
+        inputBackground: '#ffffff',
+        inputBorderColor: '#b5ccdf',
+        color: '#04273e',
+    },
+    SNOWY: {
+        backgroundImage: 'url("./image/snowy_background.jpg")',
+        appBackground: 'linear-gradient(135deg, #778899, #F5F5F5)',
+        appImageBackground: 'url("./image/snow.png")',
+        buttonColor: 'rgba(191,191,191,0.88)',
+        inputBackground: '#ffffff',
+        inputBorderColor: '#b5ccdf',
+        color: '#3e515e',
+    },
+    STORMY: {
+        backgroundImage: 'url("./image/stormy_background.jpg")',
+        appBackground: 'linear-gradient(135deg, #C0C0C0, #FFE4C4)',
+        appImageBackground: 'url("./image/storm.png")',
+        buttonColor: 'rgba(191,191,191,0.88)',
+        inputBackground: '#ffffff',
+        inputBorderColor: '#292928',
+        color: '#292928',
+    },
+};
+
+function mapWeatherCodeToEnum(code) {
+    for (const [key, codes] of Object.entries(WEATHER_CODES)) {
+        if (codes.includes(code)) {
+            return key;
+        }
+    }
+    return null;
+}
+
+function displayError(message) {
+    const errorContainer = document.getElementById('error-message');
+    errorContainer.textContent = message;
+    errorContainer.style.display = 'block';
+}
+
+function clearError() {
+    const errorContainer = document.getElementById('error-message');
+    errorContainer.textContent = '';
+    errorContainer.style.display = 'none';
+}
+
+window.onload = () => {
+    const cityInput = document.getElementById('city-input');
+    const citySubmit = document.getElementById('city-submit');
+    const weatherInfo = document.getElementById('weather-info');
+
+    const translations = {
+        en: {
+            enterCity: 'Please enter a city name.',
+            invalidCity: 'Enter a city name containing only letters',
+            loading: 'Loading...',
+            showWeather: 'Show weather',
+            weatherNotFound: 'Failed to get weather data :( Shall we try again?',
+            cityNotFound: 'Such a city has not yet been invented :(',
+        },
+    };
+
+    const currentLang = 'en';
+
+    const savedCity = localStorage.getItem('city');
+    if (typeof savedCity === 'string' && savedCity.trim() !== '') {
+        fetchWeather(savedCity);
+    }
+
+    citySubmit.addEventListener('click', () => {
+        const city = cityInput.value.trim();
+        clearError();
+
+        if (!city) {
+            displayError(translations[currentLang].enterCity);
+            return;
+        }
+        if (!/^[a-zA-Z\s-]+$/.test(city)) {
+            displayError(translations[currentLang].invalidCity);
+            return;
+        }
+
+        localStorage.setItem('city', city);
+        citySubmit.textContent = translations[currentLang].loading;
+
+        fetchWeather(city)
+            .then(() => {
+                citySubmit.textContent = translations[currentLang].showWeather;
+                citySubmit.disabled = false;
+            })
+            .catch((error) => {
+                displayError(error.message);
+                citySubmit.textContent = translations[currentLang].showWeather;
+                citySubmit.disabled = false;
+            });
+    });
+};
+
+async function fetchWeather(city) {
+    let cityData;
+    try {
+        cityData = await fetchCityData(city);
+    } catch (error) {
+        throw new CityNotFoundError('City not found.');
+    }
+
+    let weatherData;
+    try {
+        weatherData = await fetchWeatherData(cityData);
+    } catch (error) {
+        throw new WeatherDataError('Weather data not found.');
+    }
+
+    displayWeather(weatherData);
+}
+
+async function fetchCityData(city) {
+    const cityApiUrl = `${API_BASE_URL}/city?name=${city}`;
+    const cityResponse = await fetch(cityApiUrl, {
+        headers: { 'X-Api-Key': '9aIAxYHHQOQnmq4dOkuXOA==wfQa96nJcyX8b14o' },
+    });
+
+    if (!cityResponse.ok) {
+        throw new CityNotFoundError('City not found');
+    }
+
+    const cityData = await cityResponse.json();
+    if (!cityData || cityData.length === 0) {
+        throw new CityNotFoundError('City not found');
+    }
+
+    return cityData;
+}
+
+async function fetchWeatherData(cityData) {
+    const { latitude, longitude } = cityData[0];
+    const weatherApiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`;
+    const weatherResponse = await fetch(weatherApiUrl);
+
+    if (!weatherResponse.ok) {
+        throw new WeatherDataError('Weather data not found');
+    }
+
+    const weatherData = await weatherResponse.json();
+    return weatherData;
+}
+
 function updateWeatherStyle(code) {
+    const weatherType = mapWeatherCodeToEnum(code);
+    const styles = WEATHER_STYLES[weatherType] || {};
+
     const body = document.body;
     const appContainer = document.querySelector('.weather-app');
     const appImage = document.querySelector('.weather-app__image');
-    const button = citySubmit;
-    const input = cityInput;
-
-    let backgroundImage, appBackground, appImageBackground, buttonColor, inputBackground, inputBorderColor, color;
-
-    if ([0, 1].includes(code)){
-        backgroundImage = 'url("./image/jeito.jpg")';
-        appBackground = 'linear-gradient(135deg, #FFFACD, #FFE4B5)';
-        appImage.style.cssText = `background-image: url("./image/sun.png"); width: 100px; height: 100px;`;
-        buttonColor = '#fffacd';
-        inputBackground = '#ffffff';
-        inputBorderColor = '#5c582b';
-        color = '#BDB76B';
-    } else if ([2, 3].includes(code)) {
-        backgroundImage = 'url("./image/sinii.jpg")';
-        appBackground = 'linear-gradient(135deg, #778899, #F0F8FF)';
-        appImage.style.cssText = `background-image: url("./image/cloudy.png"); width: 100px; height: 80px;`
-        buttonColor = '#7297af';
-        inputBackground = '#ffffff';
-        inputBorderColor = '#04273e';
-        color = '#04273e';
-    } else if ([51, 53, 55, 61, 63, 65, 81, 82, 85].includes(code)) {
-        backgroundImage = 'url("./image/rainfon.jpg")';
-        appBackground = 'linear-gradient(135deg, #808080, #ADD8E6)';
-        appImage.style.cssText = `background-image: url("./image/rain.png"); width: 100px; height: 100px;`
-        buttonColor = '#9cbbd6';
-        inputBackground = '#ffffff';
-        inputBorderColor = '#b5ccdf';
-        color = '#04273e';
-    } else if ([71, 73, 75, 77, 85, 86].includes(code)) {
-        backgroundImage = 'url("./image/snowfon.jpg")';
-        appBackground = 'linear-gradient(135deg, #778899, #F5F5F5)';
-        appImage.style.cssText = `background-image: url("./image/snow.png"); width: 100px; height: 100px;`
-        buttonColor = 'rgba(191,191,191,0.88)';
-        inputBackground = '#ffffff';
-        inputBorderColor = '#b5ccdf';
-        color = '#ffffff';
-    } else if ([95, 96, 99].includes(code)) {
-        backgroundImage = 'url("./image/stormfon.jpg")';
-        appBackground = 'linear-gradient(135deg, #C0C0C0, #FFE4C4)';
-        appImage.style.cssText = `background-image: url("./image/storm.png"); width: 100px; height: 100px;`
-        buttonColor = 'rgba(191,191,191,0.88)';
-        inputBackground = '#ffffff';
-        inputBorderColor = '#292928';
-        color = '#292928';
-    }
+    const button = document.getElementById('city-submit');
+    const input = document.getElementById('city-input');
 
     body.style.transition = 'background 2s ease';
-    body.style.backgroundImage = backgroundImage;
+    body.style.backgroundImage = styles.backgroundImage || '';
     body.style.backgroundSize = 'cover';
     body.style.backgroundRepeat = 'no-repeat';
     body.style.backgroundPosition = 'center';
 
     appContainer.style.transition = 'background 1.5s ease, color 1.5s ease';
-    appContainer.style.background = appBackground;
-    appContainer.style.color = color;
+    appContainer.style.background = styles.appBackground || '';
+    appContainer.style.color = styles.color || '';
 
     appImage.style.transition = 'background 1.5s ease';
-    appImage.style.backgroundImage = appImageBackground;
+    appImage.style.backgroundImage = styles.appImageBackground || '';
 
     button.style.transition = 'background 1.5s ease, color 1.5s ease';
-    button.style.background = buttonColor;
-    button.style.color = color;
+    button.style.background = styles.buttonColor || '';
+    button.style.color = styles.color || '';
 
     input.style.transition = 'background 1.5s ease, border-color 1.5s ease, color 1.5s ease';
-    input.style.background = inputBackground;
-    input.style.borderColor = inputBorderColor;
-    input.style.color = color;
+    input.style.background = styles.inputBackground || '';
+    input.style.borderColor = styles.inputBorderColor || '';
+    input.style.color = styles.color || '';
 }
-
-
 
 function displayWeather(data) {
     const { temperature, weathercode } = data.current_weather;
+    const weatherType = mapWeatherCodeToEnum(weathercode);
+    const description = WEATHER_DESCRIPTIONS[weatherType] || 'Unknown weather';
+
+    const weatherInfo = document.getElementById('weather-info');
     weatherInfo.innerHTML = `
         <h2>Weather according to your request:</h2>
         <p>Temperature: ${temperature}°C</p>
-        <p>Precipitation: ${getWeatherDescription(weathercode)}</p>
+        <p>Precipitation: ${description}</p>
     `;
+
     updateWeatherStyle(weathercode);
-}
-
-function getWeatherDescription(code) {
-    const descriptions = {
-        0: 'Clear skies',
-        1: 'Mostly clear',
-        2: 'Partly cloudy',
-        3: 'Cloudy',
-        51: 'Drizzle (light)',
-        53: 'Drizzle (moderate)',
-        55: 'Drizzle (thick)',
-        61: 'Rain (light)',
-        63: 'Rain (moderate)',
-        65: 'Rain (heavy)',
-        71: 'Snowfall (light)',
-        73: 'Snowfall (moderate)',
-        75: 'Snowfall (heavy)',
-        77: 'Snow Grains',
-        80: 'Rain (light)',
-        81: 'Rainfall (moderate)',
-        82: 'Rain: heavy',
-        85: 'Intermittent snowfall (light)',
-        86: 'Intermittent snowfall (heavy)',
-        95: 'Thunderstorm',
-        96: 'Thunderstorm with hail (weak)',
-        99: 'Hail Thunderstorm (Severe)'
-    };
-
-    return descriptions[code] || 'Unknown weather';
 }
